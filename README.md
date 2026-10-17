@@ -13,6 +13,9 @@ schedtool squashfs-tools xsltproc zip zlib1g-dev 获得。
 
 还需要一个defconfig：scripts/extract-ikconfig boot.img > device_config 获得官方lineage-23.2-20261014编译配置
 
+获取到device_config放到内核根目录，并改名.config:
+make O=out ARCH=arm64 CC=clang LLVM=1 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- mars_defconfig
+
 
 make编译代码：
 make O=out ARCH=arm64 CC=clang LLVM=1 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc --all)2>&1 | tee build.log
