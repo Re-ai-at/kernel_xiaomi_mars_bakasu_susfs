@@ -3367,6 +3367,12 @@ static inline int vfs_fstatat(int dfd, const char __user *filename,
 }
 static inline int vfs_fstat(int fd, struct kstat *stat)
 {
+#ifdef CONFIG_KSU_SUSFS
+	extern struct static_key_true ksu_is_init_rc_hook_enabled;
+	extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
+	if (static_branch_unlikely(&ksu_is_init_rc_hook_enabled))
+		ksu_handle_vfs_fstat(fd, &stat->size);
+#endif
 	return vfs_statx_fd(fd, stat, STATX_BASIC_STATS, 0);
 }
 

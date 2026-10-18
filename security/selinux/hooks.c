@@ -109,6 +109,21 @@ struct selinux_state selinux_state __rticdata;
 struct selinux_state selinux_state;
 #endif
 
+#ifdef CONFIG_KSU_SUSFS
+extern bool ksu_selinux_hide_running __read_mostly;
+/* fake_state: snapshot of selinux_state taken at first use, so context
+ * checks for hidden app UIDs run against the pre-load policy (5.10 KSU semantics).
+ * 5.4 has no status_lock member; BakaSU supplies the hide machinery itself.
+ */
+struct selinux_state fake_state;
+struct selinux_state *susfs_get_fake_state(void)
+{
+	if (unlikely(!READ_ONCE(fake_state.ss)))
+		WRITE_ONCE(fake_state, selinux_state);
+	return &fake_state;
+}
+#endif
+
 /* SECMARK reference count */
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);
 
@@ -6467,6 +6482,11 @@ static int selinux_setprocattr(const char *name, void *value, size_t size)
 	u32 mysid = current_sid(), sid = 0, ptsid;
 	int error;
 	char *str = value;
+#ifdef CONFIG_KSU_SUSFS
+	bool should_check_current = (likely(!strcmp(name, "current") &&
+								 current_uid().val >= 10000 &&
+								 ksu_selinux_hide_running));
+#endif // #ifdef CONFIG_KSU_SUSFS
 
 	/*
 	 * Basic control over ability to set these attributes at all.
@@ -6502,6 +6522,15 @@ static int selinux_setprocattr(const char *name, void *value, size_t size)
 			str[size-1] = 0;
 			size--;
 		}
+#ifdef CONFIG_KSU_SUSFS
+		if (should_check_current) {
+			u32 tmp_sid = 0;
+			int fake_error = security_context_to_sid(susfs_get_fake_state(), value, size, &tmp_sid, GFP_KERNEL);
+			if (fake_error)
+				return fake_error;
+		}
+#endif // #ifdef CONFIG_KSU_SUSFS
+
 		error = security_context_to_sid(&selinux_state, value, size,
 						&sid, GFP_KERNEL);
 		if (error == -EINVAL && !strcmp(name, "fscreate")) {
